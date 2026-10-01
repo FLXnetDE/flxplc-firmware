@@ -4,25 +4,57 @@ IOService::IOService(IHardwareIO &hardware)
     : _hardware(hardware) {
 }
 
+// --------------------------------------------------
+// Initialization
+// --------------------------------------------------
+
 bool IOService::begin() {
-    _initialized = _hardware.begin();
+    if (_initialized) {
+        return true;
+    }
+
+    _inputs = 0;
+    _outputs = 0;
+
+    if (!_hardware.begin()) {
+        return false;
+    }
+
+    _initialized = true;
+
+    // Ensure all logical outputs are inactive.
+    if (!resetOutputs()) {
+        _initialized = false;
+        return false;
+    }
+
+    return true;
+}
+
+bool IOService::isInitialized() const {
     return _initialized;
 }
 
-bool IOService::update() {
+// --------------------------------------------------
+// Digital inputs
+// --------------------------------------------------
+
+bool IOService::readInputs() {
     if (!_initialized) {
         return false;
     }
 
-    uint8_t inputs;
+    uint8_t states = 0;
 
-    if (!_hardware.readInputs(inputs)) {
+    if (!_hardware.readInputs(states)) {
         return false;
     }
 
-    _inputs = inputs;
+    // Update process image only after a
+    // successful hardware read.
+    _inputs = states;
 
-    return _hardware.writeOutputs(_outputs);
+    return true;
 }
 
 bool IOService::getInput(uint8_t channel) const {
@@ -30,8 +62,18 @@ bool IOService::getInput(uint8_t channel) const {
         return false;
     }
 
-    return (_inputs & (1U << channel)) != 0;
+    uint8_t mask = (1U << channel);
+
+    return (_inputs & mask) != 0;
 }
+
+uint8_t IOService::getInputs() const {
+    return _inputs;
+}
+
+// --------------------------------------------------
+// Digital outputs
+// --------------------------------------------------
 
 void IOService::setOutput(
     uint8_t channel,
@@ -41,17 +83,41 @@ void IOService::setOutput(
         return;
     }
 
+    uint8_t mask = (1U << channel);
+
     if (state) {
-        _outputs |= (1U << channel);
+        _outputs |= mask;
     } else {
-        _outputs &= ~(1U << channel);
+        _outputs &= ~mask;
     }
 }
 
-uint8_t IOService::getInputs() const {
-    return _inputs;
+void IOService::setOutputs(uint8_t states) {
+    _outputs = states;
 }
 
 uint8_t IOService::getOutputs() const {
     return _outputs;
+}
+
+bool IOService::writeOutputs() {
+    if (!_initialized) {
+        return false;
+    }
+
+    return _hardware.writeOutputs(_outputs);
+}
+
+// --------------------------------------------------
+// Output reset
+// --------------------------------------------------
+
+bool IOService::resetOutputs() {
+    _outputs = 0;
+
+    if (!_initialized) {
+        return false;
+    }
+
+    return writeOutputs();
 }

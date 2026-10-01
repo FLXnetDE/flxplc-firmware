@@ -3,41 +3,72 @@
 #include <IOService.h>
 #include <WaveshareIO.h>
 
+#include <PLCRuntime.h>
+#include <TestProgram.h>
+
 WaveshareIO hardware;
 IOService io(hardware);
 
+TestProgram program;
+PLCRuntime runtime(io, program, 20);
+
 void setup() {
     Serial.begin(115200);
+
     delay(2000);
 
     Serial.println("flxplc starting...");
 
     if (!io.begin()) {
         Serial.println("IO initialization failed!");
-
-        while (true) {
-            delay(1000);
-        }
-    }
-
-    Serial.println("IO initialized.");
-}
-
-void loop() {
-    if (!io.update()) {
-        Serial.println("IO update failed!");
-        delay(1000);
         return;
     }
 
-    Serial.print("Digital Inputs: ");
-
-    for (uint8_t i = 0; i < 8; i++) {
-        Serial.print(io.getInput(i) ? "1" : "0");
-        Serial.print(" ");
+    if (!runtime.begin()) {
+        Serial.println("Runtime initialization failed!");
+        return;
     }
 
-    Serial.println();
+    Serial.println("Runtime initialized.");
+    Serial.println("Commands: r=RUN, s=STOP");
+}
 
-    delay(500);
+void loop() {
+    if (Serial.available()) {
+        char command = Serial.read();
+
+        switch (command) {
+            case 'r':
+                runtime.start();
+                break;
+
+            case 's':
+                runtime.stop();
+                break;
+        }
+    }
+
+    static uint32_t lastTelemetry = 0;
+
+    if (millis() - lastTelemetry >= 1000) {
+        lastTelemetry = millis();
+
+        RuntimeTelemetry t =
+            runtime.getTelemetry();
+
+        Serial.printf(
+            "State=%d Cycles=%lu "
+            "Last=%lu us Max=%lu us "
+            "Overruns=%lu DI=%02X DO=%02X\n",
+            static_cast<int>(t.state),
+            static_cast<unsigned long>(t.cycleCount),
+            static_cast<unsigned long>(t.lastCycleUs),
+            static_cast<unsigned long>(t.maxCycleUs),
+            static_cast<unsigned long>(t.overrunCount),
+            t.inputs,
+            t.outputs
+        );
+    }
+
+    delay(10);
 }
