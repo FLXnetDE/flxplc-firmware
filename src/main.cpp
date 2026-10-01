@@ -1,18 +1,43 @@
 #include <Arduino.h>
 
-// put function declarations here:
-int myFunction(int, int);
+#include <IOService.h>
+#include <WaveshareIO.h>
+
+WaveshareIO hardware;
+IOService io(hardware);
 
 void setup() {
-  // put your setup code here, to run once:
-  int result = myFunction(2, 3);
+    Serial.begin(115200);
+    delay(2000);
+
+    Serial.println("flxplc starting...");
+
+    if (!io.begin()) {
+        Serial.println("IO initialization failed!");
+
+        while (true) {
+            delay(1000);
+        }
+    }
+
+    Serial.println("IO initialized.");
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-}
+    if (!io.update()) {
+        Serial.println("IO update failed!");
+        delay(1000);
+        return;
+    }
 
-// put function definitions here:
-int myFunction(int x, int y) {
-  return x + y;
+    Serial.print("Digital Inputs: ");
+
+    for (uint8_t i = 0; i < 8; i++) {
+        Serial.print(io.getInput(i) ? "1" : "0");
+        Serial.print(" ");
+    }
+
+    Serial.println();
+
+    delay(500);
 }
